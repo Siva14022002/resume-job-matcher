@@ -3,8 +3,12 @@ import os
 import tempfile
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from pydantic import BaseModel
 
+from app.services.matcher import match_skills
 from app.services.parser import extract_text_from_pdf
+from app.services.skills import extract_skills
+
 
 app = FastAPI(
     title="Resume Job Matcher",
@@ -49,10 +53,14 @@ def parse_resume(file: UploadFile = File(...)):
                 detail="No text found. The PDF may be scanned or empty."
             )
 
+        skills = extract_skills(extracted_text)
+
         return {
             "filename": file.filename,
             "text": extracted_text,
-            "characters": len(extracted_text)
+            "characters": len(extracted_text),
+            "skills": skills,
+            "skills_count": len(skills)
         }
 
     except HTTPException:
@@ -66,3 +74,18 @@ def parse_resume(file: UploadFile = File(...)):
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
         file.file.close()
+
+
+
+
+class JobMatchRequest(BaseModel):
+    resume_text: str
+    job_description: str
+
+
+@app.post("/match")
+def match_resume_to_job(request: JobMatchRequest):
+    return match_skills(
+        request.resume_text,
+        request.job_description,
+    )
